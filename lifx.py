@@ -42,6 +42,7 @@ def uncaught_handler(exception_type, value, traceback):
             traceback))
 
 
+# Log uncaught exceptions to file & stdout
 sys.excepthook = uncaught_handler
 
 
@@ -99,13 +100,6 @@ def get_state(device: Device, silent: bool = False) -> Dict[str, int]:
     return dict(result)
 
 
-# All on
-# bytestring = b'\x2a\x00\x00\x34\xb4\x3c\xf0\x84\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x0d\x00\x00\x00\x00\x00\x00\x00\x00\x75\x00\x00\x00\xff\xff\xe8\x03\x00\x00'
-# All off
-# bytestring =
-# b'\x2a\x00\x00\x34\xb4\x3c\xf0\x84\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x0b\x00\x00\x00\x00\x00\x00\x00\x00\x75\x00\x00\x00\x00\x00\xe8\x03\x00\x00'
-
-
 class MotionHandler:
     """Handles triggers from a PIR"""
     dark = 0.01
@@ -117,6 +111,8 @@ class MotionHandler:
         self.fadetime = fadetime
         self.last_state = {}
         self.is_active = True
+        self.fading_timer = threading.Timer(self.fadetime.total_seconds(), self.fading_false)
+        self.is_fading = False
 
         self.pir.when_activated = self.motion
         self.pir.when_deactivated = self.no_motion
@@ -127,11 +123,20 @@ class MotionHandler:
         """Returns seconds to wait for delay"""
         return self.delay.total_seconds()
 
+    def fading_false(self):
+        """Set `self.is_fading` to False"""
+        self.is_fading = False
+
     def timeout(self):
         """Funciton triggered `delay` time after no motion"""
         try:
             self.is_active = False
             self.brightness(self.dark, self.fadetime.total_seconds())
+            if self.fading_timer.is_alive():
+                self.fading_timer.cancel()
+            self.fading_timer = threading.Timer(self.fadetime.total_seconds(), self.fading_false)
+            self.fading_timer.start()
+            self.is_fading = True
             log.info("Timer executed!")
         except BaseException as err:
             log.exception("Uncaught exception in thread")
@@ -139,6 +144,8 @@ class MotionHandler:
 
     def motion(self):
         """Triggered when PIR senses motion"""
+        if self.fading_timer.is_alive():
+            self.fading_timer.cancel()
         if self.timer.is_alive():
             self.timer.cancel()
         if not self.is_active:
@@ -172,12 +179,17 @@ class MotionHandler:
 
 
 if __name__ == "__main__":
+    args = dict(enumerate(sys.argv))
     # BCM Pin 17, Physical 11
-    handler = MotionHandler(MotionSensor(17), timedelta(minutes=5), fadetime=timedelta(minutes=5))
+    handler = MotionHandler(
+        MotionSensor(17),
+        timedelta(minutes=float(args.get(1, 5))),
+        fadetime=timedelta(minutes=float(args.get(2, 5)))
+    )
 
     while True:
         try:
-            if handler.is_active:
+            if handler.is_active or (not handler.is_active and not handler.is_fading):
                 new_state = get_state(Device.Taklampa, silent=True)
                 if new_state.get("brightness", 0) > handler.dark * 0xFFFF \
                         and new_state.get("power") >= 0xFF00:
@@ -188,6 +200,6 @@ if __name__ == "__main__":
                             new_state.get("power"))
                         handler.last_state = new_state
         except socket.timeout:
-            log.error("Socket timed out during interval, retrying in 5 seconds")
+            log.error("Socket timed out during interval, retrying in 5 seconds", exc_info=False)
         finally:
             time.sleep(5)
