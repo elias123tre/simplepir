@@ -191,7 +191,7 @@ if __name__ == "__main__":
         try:
             if handler.is_active or (not handler.is_active and not handler.is_fading):
                 new_state = get_state(Device.Taklampa, silent=True)
-                if new_state.get("brightness", 0) > handler.dark * 0xFFFF \
+                if new_state.get("brightness", 0) > (handler.dark * 10) * 0xFFFF \
                         and new_state.get("power") >= 0xFF00:
                     if new_state.get("brightness") != handler.last_state.get("brightness"):
                         log.debug(
@@ -200,6 +200,9 @@ if __name__ == "__main__":
                             new_state.get("power"))
                         handler.last_state = new_state
         except socket.timeout:
-            log.error("Socket timed out during interval, retrying in 5 seconds", exc_info=False)
+            log.error(
+                "Socket timed out during ping to %s, retrying in 5 seconds",
+                Device.Taklampa.value,
+                exc_info=False)
         finally:
             time.sleep(5)

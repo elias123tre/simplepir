@@ -231,7 +231,8 @@ class Packet:
     @property
     def msgtype(self):
         """Message type"""
-        msgtype = next(filter(lambda par: par.name == "message type", self.protocol_header))
+        msgtype = next(filter(lambda par: par.name ==
+                              "message type", self.protocol_header))
         return int.from_bytes(msgtype, 'little')
 
     def info(self):
@@ -299,7 +300,8 @@ class Packet:
         packet.payload.append_param("brightness", int(brightness), tobytes(16))
         packet.payload.append_param("kelvin", int(kelvin), tobytes(16))
         # In milliseconds
-        packet.payload.append_param("duration", int(duration * 1000), tobytes(32))
+        packet.payload.append_param(
+            "duration", int(duration * 1000), tobytes(32))
         packet.set_size()
         return packet
 
@@ -311,7 +313,8 @@ class Packet:
         packet.set_headers(117)
         packet.payload.append_param("level", int(0xFFFF * power), tobytes(16))
         # In milliseconds
-        packet.payload.append_param("duration", int(duration * 1000), tobytes(32))
+        packet.payload.append_param(
+            "duration", int(duration * 1000), tobytes(32))
         packet.set_size()
         return packet
 
